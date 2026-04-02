@@ -20,10 +20,7 @@ body {
 }
 
 body {
-  background:
-    radial-gradient(circle at top left, rgba(14, 165, 233, 0.12), transparent 24%),
-    radial-gradient(circle at bottom right, rgba(245, 158, 11, 0.12), transparent 22%),
-    #f1f5f9;
+  background: #f1f5f9;
 }
 
 button,
@@ -35,84 +32,6 @@ input {
   min-height: 100vh;
 }
 
-.hidden {
-  display: none;
-}
-
-.gauge-shell {
-  position: relative;
-  width: min(100%, 360px);
-  aspect-ratio: 1.4 / 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.gauge-svg {
-  width: 100%;
-  height: auto;
-  overflow: visible;
-}
-
-.gauge-track,
-.gauge-progress {
-  fill: none;
-  stroke-linecap: round;
-  stroke-width: 18;
-}
-
-.gauge-track {
-  stroke: #e2e8f0;
-}
-
-.gauge-progress {
-  stroke-dasharray: 12 100;
-  transition: stroke 220ms ease;
-}
-
-.gauge-stable {
-  stroke: #16a34a;
-}
-
-.gauge-monitor {
-  stroke: #ca8a04;
-}
-
-.gauge-warning {
-  stroke: #ea580c;
-}
-
-.gauge-critical {
-  stroke: #dc2626;
-}
-
-.gauge-needle {
-  transform-origin: 120px 120px;
-  transition: transform 220ms ease;
-}
-
-.gauge-needle line {
-  stroke: #0f172a;
-  stroke-width: 6;
-  stroke-linecap: round;
-}
-
-.gauge-needle circle {
-  fill: #0f172a;
-}
-
-.gauge-reading {
-  position: absolute;
-  inset: auto 0 12px 0;
-  text-align: center;
-}
-
 input[type='radio'] {
   accent-color: #0284c7;
-}
-
-@media (max-width: 640px) {
-  .gauge-shell {
-    width: min(100%, 310px);
-  }
 }
