@@ -4,6 +4,7 @@ import os
 import shap
 import numpy as np
 import json
+import secrets
 from flask import Flask, request, jsonify, session
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -24,10 +25,9 @@ model_pkg = joblib.load(model_path)
 rf_model = model_pkg['model']
 final_features = model_pkg['features'] 
 
-# --- 2b. INITIALIZE SHAP EXPLAINER ---
 explainer = shap.TreeExplainer(rf_model)
 
-# --- 2c. WHO Z-SCORE TABLES & ENGINE ---
+# --- 3. WHO Z-SCORE ENGINE ---
 def load_who(name):
     return pd.read_csv(os.path.join(base_dir, "who_tables", name))
 
@@ -47,10 +47,7 @@ def get_lms(df, col, value):
 
 def compute_zscores(age, weight, height, gender):
     g = gender.lower()
-    wfa = wfa_b if g == "male" else wfa_g
-    hfa = hfa_b if g == "male" else hfa_g
-    wfh = wfh_b if g == "male" else wfh_g
-
+    wfa, hfa, wfh = (wfa_b, hfa_b, wfh_b) if g == "male" else (wfa_g, hfa_g, wfh_g)
     L, M, S = get_lms(wfa, "Month", age)
     waz = zscore_calc(weight, L, M, S)
     L, M, S = get_lms(hfa, "Month", age)
@@ -60,21 +57,22 @@ def compute_zscores(age, weight, height, gender):
     whz = zscore_calc(weight, L, M, S)
     return haz, whz, waz
 
-# --- 3. DATABASE MODELS ---
+# --- 4. DATABASE MODELS ---
 class User(db.Model):
     __tablename__ = 'users'
     user_id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
-    password_hash = db.Column(db.String(255), nullable=False)
-    full_name = db.Column(db.String(100))
+    email = db.Column(db.String(100), unique=True, nullable=False)
+    password_hash = db.Column(db.String(255), nullable=True) # Null until verification
     role = db.Column(db.Enum('Admin', 'CHW'), nullable=False)
+    is_verified = db.Column(db.Boolean, default=False)
+    verification_token = db.Column(db.String(100), unique=True, nullable=True)
 
 class Patient(db.Model):
     __tablename__ = 'patients'
     patient_id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     gender = db.Column(db.Enum('Male', 'Female'))
-    screenings = db.relationship('Screening', backref='patient', lazy=True)
 
 class Screening(db.Model):
     __tablename__ = 'screenings'
@@ -92,7 +90,7 @@ class Screening(db.Model):
     recommendation = db.Column(db.Text)
     screening_date = db.Column(db.DateTime, default=db.func.current_timestamp())
 
-# --- 4. AUTHENTICATION HELPERS ---
+# --- 5. AUTHENTICATION & VERIFICATION ---
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -101,69 +99,53 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated
 
-@app.route('/register', methods=['POST'])
-@login_required # Ensure someone is logged in
-def register():
-    # 1. Access Control: Check if the logged-in user is an Admin
-    if session.get('role') != 'Admin':
-        return jsonify({"message": "Access Denied: Only Admins can register new users"}), 403
-
-    data = request.json
-    
-    # Check if username already exists to prevent crashes
-    if User.query.filter_by(username=data['username']).first():
-        return jsonify({"message": "Username already exists"}), 400
-
-    new_user = User(
-        username=data['username'],
-        password_hash=generate_password_hash(data['password']),
-        full_name=data.get('full_name', ''),
-        role=data.get('role', 'CHW') # Defaults to CHW unless specified
-    )
-    
-    db.session.add(new_user)
-    db.session.commit()
-    return jsonify({"message": f"User {data['username']} registered successfully"}), 201
-
 @app.route('/login', methods=['POST'])
 def login():
     data = request.json
     user = User.query.filter_by(username=data['username']).first()
     if user and check_password_hash(user.password_hash, data['password']):
+        if not user.is_verified:
+            return jsonify({"message": "Account not verified. Check your email."}), 403
         session['user_id'] = user.user_id
         session['role'] = user.role
-        return jsonify({"message": "Login successful", "role": user.role, "user_id": user.user_id})
+        return jsonify({"message": "Login successful", "role": user.role})
     return jsonify({"message": "Invalid credentials"}), 401
 
-# --- 5. SEARCH & HISTORY ROUTES ---
-@app.route('/patients/search', methods=['GET'])
+@app.route('/admin/invite_chw', methods=['POST'])
 @login_required
-def search_patients():
-    query = request.args.get('name', '')
-    patients = Patient.query.filter(Patient.name.ilike(f"%{query}%")).all()
-    results = [{"id": p.patient_id, "name": p.name, "gender": p.gender} for p in patients]
-    return jsonify(results)
+def invite_chw():
+    if session.get('role') != 'Admin':
+        return jsonify({"message": "Admin access required"}), 403
+    data = request.json
+    token = secrets.token_urlsafe(32)
+    new_chw = User(
+        username=data['username'],
+        email=data['email'],
+        role='CHW',
+        verification_token=token,
+        is_verified=False
+    )
+    db.session.add(new_chw)
+    db.session.commit()
+    return jsonify({
+        "message": "CHW Invitation Created",
+        "verification_link": f"http://127.0.0.1:5000/verify/{token}"
+    })
 
-@app.route('/patient/<int:patient_id>/history', methods=['GET'])
-@login_required
-def get_patient_history(patient_id):
-    screenings = Screening.query.filter_by(patient_id=patient_id).order_by(Screening.screening_date.desc()).all()
-    if not screenings:
-        return jsonify({"message": "No history found"}), 404
+@app.route('/verify/<token>', methods=['POST'])
+def verify_account(token):
+    data = request.json
+    user = User.query.filter_by(verification_token=token).first()
+    if not user:
+        return jsonify({"message": "Invalid or expired token"}), 400
     
-    history = []
-    for s in screenings:
-        history.append({
-            "date": s.screening_date.strftime("%Y-%m-%d"),
-            "age": s.age_months,
-            "weight": s.weight_kg,
-            "danger_score": f"{s.danger_score}%",
-            "status": s.status,
-            "recommendation": json.loads(s.recommendation)
-        })
-    return jsonify({"patient_id": patient_id, "history": history})
+    user.password_hash = generate_password_hash(data['password'])
+    user.is_verified = True
+    user.verification_token = None
+    db.session.commit()
+    return jsonify({"message": "Account verified successfully. You can now login."})
 
-# --- 6. PROACTIVE AI PREDICT ENGINE ---
+# --- 6. PROACTIVE PREDICT ENGINE ---
 @app.route('/predict', methods=['POST'])
 @login_required
 def predict():
@@ -176,12 +158,10 @@ def predict():
     probs = rf_model.predict_proba(input_df)[0]
     score = round(probs[1] * 100, 1)
     
-    # SHAP Drivers
+    # SHAP Logic
     shap_values = explainer.shap_values(input_df)
-    if isinstance(shap_values, list): local_contrib = np.array(shap_values[1]).flatten()
-    elif len(shap_values.shape) == 3: local_contrib = shap_values[0, :, 1]
-    else: local_contrib = np.array(shap_values[0]).flatten()
-
+    local_contrib = np.array(shap_values[1]).flatten() if isinstance(shap_values, list) else np.array(shap_values[0]).flatten()
+    
     clinical_names = {'haz': 'Chronic Stunting', 'whz': 'Acute Wasting', 'waz': 'Underweight', 'Gender': 'Biological Factor', 'diarrhea': 'Diarrhea', 'anemia': 'Anemia', 'malaria': 'Malaria'}
     risks = sorted([{"display": clinical_names.get(final_features[i], final_features[i]), "val": float(contrib)} for i, contrib in enumerate(local_contrib) if contrib > 0], key=lambda x: x['val'], reverse=True)
 
@@ -190,7 +170,7 @@ def predict():
     else:
         top_driver = risks[0]['display'] if risks else "Growth Maintenance"
 
-    # Patient Context
+    # Patient History & Proactive Logic
     patient = Patient.query.filter_by(name=data['patient_name']).first()
     if not patient:
         patient = Patient(name=data['patient_name'], gender=gender_str)
@@ -198,7 +178,6 @@ def predict():
     
     prev_visit = Screening.query.filter_by(patient_id=patient.patient_id).order_by(Screening.screening_date.desc()).first()
 
-    # Recommendations Initialization
     if score >= 70: status, imm, short = "Critical", "Emergency Clinical Referral", "Therapeutic Feeding (RUTF)"
     elif score >= 40: status, imm, short = "At Risk", "Clinical Consultation", "Supplementary Feeding"
     else: status, imm, short = "Stable", "Standard Monitoring", "Nutritional Counseling"
@@ -206,47 +185,40 @@ def predict():
     early_flags = []
     if whz < -3: early_flags.append("Severe wasting detected")
     if data['diarrhea'] and data['malaria']: early_flags.append("Active infection cluster (High Risk)")
-    if score < 20 and not (data['diarrhea'] or data['malaria']):
-        if haz < 0 or whz < 0: early_flags.append("Slight deviation from optimal WHO growth standards")
-        early_flags.append("Preventive monitoring recommended in high-risk environment")
-
-    # Proactive Velocity Logic
+    
     if prev_visit:
         weight_diff = data['weight_kg'] - prev_visit.weight_kg
         if weight_diff < 0:
             proactive_status = "High Deterioration Risk (Negative Velocity)"
             early_flags.append(f"Rapid Weight Loss: {round(abs(weight_diff), 2)}kg lost since last visit")
             imm, short = "Urgent Nutritional Assessment", "High-protein supplementation"
-        else:
-            proactive_status = "Healthy / Growth Maintained" if score < 20 else "Stable / Improving Trajectory"
+        else: proactive_status = "Healthy / Growth Maintained" if score < 20 else "Stable / Improving Trajectory"
     else:
-        if (data['diarrhea'] or data['malaria']) and score > 40: proactive_status = "High Deterioration Risk (Infection Cluster)"
-        elif score < 20:
-            proactive_status, top_driver = "Healthy but Monitor for Stability", "No Immediate Risk Factor"
-            imm, short = "No clinical action required", "Monthly growth monitoring"
-        else: proactive_status = "Initial Baseline Assessment"
+        proactive_status = "Healthy but Monitor for Stability" if score < 20 else "Initial Baseline Assessment"
 
-    rec_dict = {"immediate": imm, "short_term": short, "preventive": "Maintain balanced nutrition/hygiene" if score < 20 else "Infection treatment + weekly monitoring"}
-
+    rec_dict = {"immediate": imm, "short_term": short, "preventive": "Maintain balanced nutrition and hygiene practices"}
     new_screening = Screening(patient_id=patient.patient_id, chw_id=session['user_id'], age_months=data['age_months'], weight_kg=data['weight_kg'], height_cm=data['height_cm'], diarrhea=data['diarrhea'], anemia=data['anemia'], malaria=data['malaria'], danger_score=score, status=status, recommendation=json.dumps(rec_dict))
     db.session.add(new_screening); db.session.commit()
 
-    return jsonify({"danger_score": f"{score}%", "status": status, "proactive_status": proactive_status, "z_scores": {"HAZ": round(haz, 2), "WHZ": round(whz, 2), "WAZ": round(waz, 2)}, "primary_risk": top_driver, "early_warning_flags": early_flags, "recommendation": rec_dict})
+    return jsonify({"danger_score": f"{score}%", "status": status, "proactive_status": proactive_status, "primary_risk": top_driver, "early_warning_flags": early_flags, "recommendation": rec_dict, "z_scores": {"HAZ": round(haz, 2), "WHZ": round(whz, 2), "WAZ": round(waz, 2)}})
 
 # --- 7. ADMIN DASHBOARD ---
 @app.route('/admin/dashboard', methods=['GET'])
 @login_required
 def admin_dashboard():
     if session.get('role') != 'Admin': return jsonify({"message": "Unauthorized"}), 403
-    stats = {
-        "total_screenings": Screening.query.count(),
-        "critical": Screening.query.filter_by(status='Critical').count(),
-        "at_risk": Screening.query.filter_by(status='At Risk').count(),
-        "stable": Screening.query.filter_by(status='Stable').count()
-    }
-    recent_alerts = Screening.query.filter(Screening.danger_score >= 60).order_by(Screening.screening_date.desc()).limit(10).all()
-    alerts = [{"patient": Screening.query.get(a.screening_id).patient.name, "score": a.danger_score, "date": a.screening_date.strftime("%Y-%m-%d")} for a in recent_alerts]
-    return jsonify({"summary": stats, "alerts": alerts})
+    stats = {"total_screenings": Screening.query.count(), "critical": Screening.query.filter_by(status='Critical').count(), "at_risk": Screening.query.filter_by(status='At Risk').count(), "stable": Screening.query.filter_by(status='Stable').count()}
+    return jsonify(stats)
+
+@app.route('/routes')
+def list_routes():
+    import urllib
+    output = []
+    for rule in app.url_map.iter_rules():
+        methods = ','.join(rule.methods)
+        line = urllib.parse.unquote(f"{rule.endpoint:50s} {methods:20s} {rule}")
+        output.append(line)
+    return "<pre>" + "\n".join(output) + "</pre>",
 
 if __name__ == '__main__':
     with app.app_context(): db.create_all()
