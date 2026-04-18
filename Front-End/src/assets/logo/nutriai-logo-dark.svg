@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320" fill="none">
+  <defs>
+    <style>
+      .nutri { fill: #1D4354; font-family: "Inter", "Poppins", "Segoe UI", sans-serif; font-weight: 700; font-size: 120px; letter-spacing: -0.02em; }
+      .ai { fill: #37A000; font-family: "Inter", "Poppins", "Segoe UI", sans-serif; font-weight: 700; font-size: 120px; letter-spacing: -0.02em; }
+      .stroke-dark { stroke: #1D4354; stroke-width: 10; stroke-linecap: round; stroke-linejoin: round; }
+      .stroke-green { stroke: #37A000; stroke-width: 8; stroke-linecap: round; stroke-linejoin: round; }
+      .node-dark { fill: #1D4354; }
+      .node-green { fill: #37A000; }
+    </style>
+  </defs>
+
+  <!-- Icon group -->
+  <g transform="translate(40,40)">
+    <!-- Child silhouette -->
+    <circle class="node-dark" cx="90" cy="60" r="24"/>
+    <path class="stroke-dark" d="M45 190c12-42 42-70 90-70s78 28 90 70" fill="none"/>
+    <path class="stroke-dark" d="M90 90v40" fill="none"/>
+    <path class="stroke-dark" d="M60 140l-30 40" fill="none"/>
+    <path class="stroke-dark" d="M120 140l30 40" fill="none"/>
+
+    <!-- Neural pattern / AI nodes -->
+    <circle class="node-green" cx="190" cy="40" r="10"/>
+    <circle class="node-green" cx="220" cy="90" r="8"/>
+    <circle class="node-green" cx="200" cy="140" r="9"/>
+    <circle class="node-green" cx="160" cy="90" r="7"/>
+    <path class="stroke-green" d="M100 70L170 55" fill="none"/>
+    <path class="stroke-green" d="M120 110L170 95" fill="none"/>
+    <path class="stroke-green" d="M140 150L185 135" fill="none"/>
+    <path class="stroke-green" d="M170 55L220 90" fill="none"/>
+    <path class="stroke-green" d="M170 95L200 140" fill="none"/>
+  </g>
+
+  <!-- Wordmark -->
+  <g transform="translate(360,200)">
+    <text class="nutri" x="0" y="0">Nutri</text>
+    <text class="ai" x="410" y="0">AI</text>
+  </g>
+</svg>

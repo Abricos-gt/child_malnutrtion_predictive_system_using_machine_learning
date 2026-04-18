@@ -10,9 +10,14 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 from datetime import datetime, timedelta
+from flask_cors import CORS
 
 app = Flask(__name__)
 app.secret_key = "abrha_secret_key_2026" 
+CORS(app, supports_credentials=True, origins=[
+    "http://localhost:5177"
+])
+
 
 # --- 1. DATABASE CONFIGURATION ---
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:123456789@127.0.0.1/malnutrition_proactive_db'
@@ -221,7 +226,21 @@ def predict():
     )
     db.session.add(new_scr); db.session.commit()
 
-    return jsonify({"danger_score": f"{score}%", "status": status, "proactive_status": proactive_status, "recommendation": rec_dict})
+    # Ensure all clinical metrics are sent back to the Vue frontend
+    return jsonify({
+        "danger_score": f"{score}%", 
+        "status": status, 
+        "proactive_status": proactive_status, 
+        "primary_risk": top_driver, 
+        "early_warning_flags": early_flags, 
+        "recommendation": rec_dict, 
+        # Add these back in so Vue can display them in the results card
+        "z_scores": {
+            "HAZ": round(haz, 2), 
+            "WHZ": round(whz, 2), 
+            "WAZ": round(waz, 2)
+        }
+    })
 
 # --- 8. PROFESSIONAL DASHBOARDS ---
 
@@ -265,6 +284,59 @@ def admin_dashboard():
         "inventory_alert": "HIGH" if critical_count > (total * 0.1) else "STABLE"
     })
 
+@app.route('/admin/create-chw', methods=['POST'])
+@login_required
+def create_chw():
+    if session.get('role') != 'Admin':
+        return jsonify({"message": "Unauthorized"}), 403
+    
+    data = request.json
+
+    # 1. Validation: Check if all required fields are present
+    required_fields = ['username', 'email', 'password']
+    for field in required_fields:
+        if field not in data:
+            return jsonify({"error": f"Missing field: {field}"}), 400
+
+    # 2. Check if user already exists
+    if User.query.filter_by(username=data['username']).first():
+        return jsonify({"error": "Username already exists"}), 409
+
+    # 3. Proceed with hashing now that we KNOW 'password' exists
+    hashed_password = generate_password_hash(data['password'], method='pbkdf2:sha256')
+    
+    new_user = User(
+        username=data['username'],
+        email=data['email'],
+        password_hash=hashed_password,
+        role='CHW',
+        is_verified=True 
+    )
+    
+    try:
+        db.session.add(new_user)
+        db.session.commit()
+        return jsonify({"message": f"CHW {data['username']} created successfully!"}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": "Database error occurred"}), 500
+
+@app.route('/admin/chw_stats', methods=['GET'])
+@login_required
+def chw_performance():
+    if session.get('role') != 'Admin': return jsonify({"message": "Unauthorized"}), 403
+    
+    # This query groups screenings by the CHW who performed them
+    performance = db.session.query(
+        User.username, 
+        db.func.count(Screening.screening_id).label('total_screenings'),
+        db.func.avg(Screening.danger_score).label('avg_risk_detected')
+    ).join(Screening, User.user_id == Screening.chw_id).group_by(User.username).all()
+    
+    return jsonify([
+        {"chw": p.username, "total": p.total_screenings, "avg_risk": round(p.avg_risk_detected, 2)} 
+        for p in performance
+    ])
 if __name__ == '__main__':
     with app.app_context(): db.create_all()
     app.run(debug=True)
