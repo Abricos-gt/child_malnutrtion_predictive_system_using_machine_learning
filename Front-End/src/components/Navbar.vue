@@ -2,6 +2,7 @@
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { authStore } from "../store";
+import { logout } from "../services/api";
 
 const isOpen = ref(false);
 const router = useRouter();
@@ -10,7 +11,12 @@ function toggleMenu() {
     isOpen.value = !isOpen.value;
 }
 
-function handleLogout() {
+async function handleLogout() {
+    try {
+        await logout();
+    } catch {
+        // ignore logout errors and proceed with local cleanup
+    }
     authStore.logout();
     isOpen.value = false;
     router.push("/");
@@ -42,18 +48,8 @@ function handleLogout() {
                 <router-link class="transition hover:text-gray-900" to="/"
                     >Home</router-link
                 >
-                <router-link
-                    class="transition hover:text-gray-900"
-                    to="/features"
-                    >Features</router-link
-                >
-                <router-link
-                    class="transition hover:text-gray-900"
-                    to="/how-it-works"
-                    >How It Works</router-link
-                >
-                <router-link class="transition hover:text-gray-900" to="/about"
-                    >About</router-link
+                <a class="transition hover:text-gray-900" href="#user-ecosystem"
+                    >Who's It For</a
                 >
             </nav>
 
@@ -106,18 +102,8 @@ function handleLogout() {
                 <router-link class="transition hover:text-gray-900" to="/"
                     >Home</router-link
                 >
-                <router-link
-                    class="transition hover:text-gray-900"
-                    to="/features"
-                    >Features</router-link
-                >
-                <router-link
-                    class="transition hover:text-gray-900"
-                    to="/how-it-works"
-                    >How It Works</router-link
-                >
-                <router-link class="transition hover:text-gray-900" to="/about"
-                    >About</router-link
+                <a class="transition hover:text-gray-900" href="#user-ecosystem"
+                    >Who's It For</a
                 >
                 <router-link
                     v-if="!authStore.user"

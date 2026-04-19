@@ -25,9 +25,11 @@ function handleLogin() {
     login(loginForm)
         .then((response) => {
             const role = response.data?.role ?? "CHW";
+            const userId = response.data?.user_id ?? null;
             authStore.login({
                 username: loginForm.username,
                 role,
+                user_id: userId,
             });
 
             if (role === "Admin") {

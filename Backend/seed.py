@@ -8,15 +8,24 @@ def create_admin():
             print("Admin already exists.")
             return
 
+        # Create admin with updated fields
         admin = User(
             username="admin_abrha",
-            password_hash=generate_password_hash("admin_secret_2026"),
-            full_name="System Administrator",
-            role="Admin"
+            email="admin@malnutrition.org",  # Added email field
+            password_hash=generate_password_hash("admin_secret_2026", method='pbkdf2:sha256'),
+            role="Admin",
+            is_verified=True # Ensures the admin can bypass verification checks
         )
-        db.session.add(admin)
-        db.session.commit()
-        print("First Admin created successfully!")
+        
+        try:
+            db.session.add(admin)
+            db.session.commit()
+            print("--- SUCCESS ---")
+            print("First Admin 'admin_abrha' created successfully!")
+            print("Password is: admin_secret_2026")
+        except Exception as e:
+            db.session.rollback()
+            print(f"Error creating admin: {e}")
 
 if __name__ == '__main__':
     create_admin()

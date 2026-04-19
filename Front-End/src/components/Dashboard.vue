@@ -1,11 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
-import {
-    createCHW,
-    getAdminDashboard,
-    getCHWDashboard,
-    getCHWStats,
-} from "../services/api";
+import { createCHW, getAdminDashboard } from "../services/api";
 import { authStore } from "../store";
 import ScreeningForm from "./ScreeningForm.vue";
 import ResultsDisplay from "./ResultsDisplay.vue";
@@ -16,8 +11,9 @@ const chwData = ref({
 });
 
 const adminData = ref({
-    system_stats: {},
-    inventory_alert: [],
+    total: 0,
+    critical: 0,
+    prevalence: {},
     chw_stats: [],
 });
 
@@ -46,8 +42,7 @@ const statusPalette = {
 };
 
 const prevalenceSegments = computed(() => {
-    const stats = adminData.value.system_stats ?? {};
-    const summary = stats.prevalence_summary ?? {};
+    const summary = adminData.value.prevalence ?? {};
     const entries = Object.entries(summary).map(([label, value]) => ({
         label,
         value: Number(value ?? 0),
@@ -91,17 +86,15 @@ async function loadDashboard() {
 
     try {
         if (authStore.user?.role === "CHW") {
-            const { data } = await getCHWDashboard();
-            chwData.value = data;
+            chwData.value = {
+                tasks_overdue: [],
+                recent_screenings: [],
+            };
         } else if (authStore.user?.role === "Admin") {
-            const [dashboardResponse, statsResponse] = await Promise.all([
-                getAdminDashboard(),
-                getCHWStats(),
-            ]);
-
+            const { data } = await getAdminDashboard();
             adminData.value = {
-                ...dashboardResponse.data,
-                chw_stats: statsResponse.data,
+                ...data,
+                chw_stats: adminData.value.chw_stats || [],
             };
         }
     } catch (error) {
@@ -129,12 +122,15 @@ function handleScreeningSubmitted(data) {
 
 function closeResults() {
     showResults.value = false;
+    activeReport.value = null;
     screeningResult.value = null;
     screeningPatient.value = null;
 }
 
 function startNewScreening() {
-    closeResults();
+    showResults.value = false;
+    screeningResult.value = null;
+    screeningPatient.value = null;
     openScreeningForm();
 }
 
@@ -357,6 +353,16 @@ onMounted(loadDashboard);
                         </table>
                     </div>
                 </div>
+
+                <!-- Inline Report -->
+                <ResultsDisplay
+                    v-if="activeReport && screeningResult && screeningPatient"
+                    :result="screeningResult"
+                    :patient="screeningPatient"
+                    :inline="true"
+                    @close="closeResults"
+                    @newScreening="startNewScreening"
+                />
             </section>
 
             <section v-else class="mt-8 grid gap-6">
@@ -370,7 +376,7 @@ onMounted(loadDashboard);
                             Total Screenings
                         </p>
                         <p class="mt-2 text-2xl font-semibold text-gray-900">
-                            {{ adminData.system_stats?.total_screenings ?? 0 }}
+                            {{ adminData.total ?? 0 }}
                         </p>
                     </div>
                     <div
@@ -382,7 +388,7 @@ onMounted(loadDashboard);
                             Critical Cases
                         </p>
                         <p class="mt-2 text-2xl font-semibold text-gray-900">
-                            {{ adminData.system_stats?.critical_cases ?? 0 }}
+                            {{ adminData.critical ?? 0 }}
                         </p>
                     </div>
                     <div
@@ -394,11 +400,7 @@ onMounted(loadDashboard);
                             At Risk
                         </p>
                         <p class="mt-2 text-2xl font-semibold text-gray-900">
-                            {{
-                                adminData.system_stats?.prevalence_summary?.[
-                                    "At Risk"
-                                ] ?? 0
-                            }}
+                            {{ adminData.prevalence?.["At Risk"] ?? 0 }}
                         </p>
                     </div>
                     <div
@@ -410,19 +412,9 @@ onMounted(loadDashboard);
                             Stable
                         </p>
                         <p class="mt-2 text-2xl font-semibold text-gray-900">
-                            {{
-                                adminData.system_stats?.prevalence_summary
-                                    ?.Stable ?? 0
-                            }}
+                            {{ adminData.prevalence?.Stable ?? 0 }}
                         </p>
                     </div>
-                </div>
-
-                <div
-                    class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
-                >
-                    Inventory Status:
-                    <strong>{{ adminData.inventory_alert || "STABLE" }}</strong>
                 </div>
 
                 <div
@@ -612,83 +604,13 @@ onMounted(loadDashboard);
                 </div>
             </div>
 
-            <section
-                v-if="activeReport"
-                class="mt-8 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"
-            >
-                <h2 class="text-lg font-semibold">Active Report Summary</h2>
-                <p class="mt-1 text-sm text-gray-600">
-                    {{ activeReport.patient?.patient_name }} —
-                    {{ activeReport.result?.status }}
-                </p>
 
-                <div class="mt-6 grid gap-4 md:grid-cols-3">
-                    <div
-                        class="rounded-xl border border-gray-200 bg-gray-50 p-4"
-                    >
-                        <p
-                            class="text-xs uppercase tracking-wide text-gray-500"
-                        >
-                            Risk Status
-                        </p>
-                        <p class="mt-2 text-lg font-semibold text-gray-900">
-                            {{ activeReport.result?.status }}
-                        </p>
-                    </div>
-                    <div
-                        class="rounded-xl border border-gray-200 bg-gray-50 p-4"
-                    >
-                        <p
-                            class="text-xs uppercase tracking-wide text-gray-500"
-                        >
-                            Risk Score
-                        </p>
-                        <p class="mt-2 text-lg font-semibold text-gray-900">
-                            {{ activeReport.result?.danger_score }}
-                        </p>
-                    </div>
-                    <div
-                        class="rounded-xl border border-gray-200 bg-gray-50 p-4"
-                    >
-                        <p
-                            class="text-xs uppercase tracking-wide text-gray-500"
-                        >
-                            Early Warnings
-                        </p>
-                        <p class="mt-2 text-sm font-semibold text-gray-900">
-                            {{ earlyWarningFlags.join(", ") || "None" }}
-                        </p>
-                    </div>
-                </div>
-
-                <div class="mt-6">
-                    <h3 class="text-base font-semibold text-gray-900">
-                        Recommendations
-                    </h3>
-                    <ul class="mt-2 space-y-1 text-sm text-gray-700">
-                        <li
-                            v-for="item in recommendationEntries"
-                            :key="item.key"
-                        >
-                            {{ item.label }}: {{ item.value }}
-                        </li>
-                    </ul>
-                </div>
-            </section>
         </template>
 
         <ScreeningForm
             v-if="showScreeningForm"
             @close="closeScreeningForm"
             @submitted="handleScreeningSubmitted"
-        />
-
-        <ResultsDisplay
-            v-if="showResults && screeningResult && screeningPatient"
-            :result="screeningResult"
-            :patient="screeningPatient"
-            @close="closeResults"
-            @newScreening="startNewScreening"
         />
     </div>
 </template>
