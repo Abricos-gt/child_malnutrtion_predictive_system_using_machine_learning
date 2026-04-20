@@ -43,6 +43,7 @@ export const searchPatients = (query) => {
 export const predict = (payload) => {
   return apiClient.post("/predict", {
     patient_id: payload.patient_id,
+    age_months: payload.age_months,
     weight_kg: payload.weight_kg,
     height_cm: payload.height_cm,
     diarrhea: payload.diarrhea,
@@ -51,8 +52,22 @@ export const predict = (payload) => {
   });
 };
 
+export const getVhwPatientDashboard = (patientId) => {
+  return apiClient.get(`/vhw/patient-dashboard/${patientId}`);
+};
+
+export const getChwUpcomingTasks = (params = {}) => {
+  return apiClient.get("/api/chw/upcoming-tasks", {
+    params,
+  });
+};
+
 export const getAdminDashboard = () => {
   return apiClient.get("/admin/dashboard");
+};
+
+export const getAdminStats = () => {
+  return apiClient.get("/api/admin/stats");
 };
 
 export const createCHW = (payload) => {
@@ -60,6 +75,13 @@ export const createCHW = (payload) => {
     username: payload.username,
     email: payload.email,
     password: payload.password,
+  });
+};
+
+export const resetChwPassword = (payload) => {
+  return apiClient.post("/api/admin/reset-password", {
+    username: payload.username,
+    new_password: payload.new_password,
   });
 };
 

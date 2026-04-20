@@ -1,5 +1,11 @@
 <script setup>
+import { computed } from "vue";
 import Navbar from "./components/Navbar.vue";
+import { authStore } from "./store";
+
+const dashboardRoute = computed(() =>
+    authStore.user?.role === "Admin" ? "/admin/dashboard" : "/dashboard",
+);
 </script>
 
 <template>
@@ -51,7 +57,9 @@ import Navbar from "./components/Navbar.vue";
                         <h4 class="text-xs font-semibold uppercase tracking-wider text-gray-400">Resources</h4>
                         <ul class="mt-4 space-y-2.5">
                             <li>
-                                <router-link to="/login" class="text-sm text-gray-300 transition hover:text-white">Login / Dashboard</router-link>
+                                <router-link :to="authStore.user ? dashboardRoute : '/login'" class="text-sm text-gray-300 transition hover:text-white">
+                                    {{ authStore.user ? "Dashboard" : "Login / Dashboard" }}
+                                </router-link>
                             </li>
                             <li>
                                 <span class="text-sm text-gray-500">WHO Growth Standards</span>
@@ -69,10 +77,10 @@ import Navbar from "./components/Navbar.vue";
                             Interested in deploying NutriAI in your community?
                         </p>
                         <router-link
-                            to="/login"
+                            :to="authStore.user ? dashboardRoute : '/login'"
                             class="mt-4 inline-flex rounded-lg bg-[#10B981] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0EA371]"
                         >
-                            Get Started
+                            {{ authStore.user ? "Open Dashboard" : "Get Started" }}
                         </router-link>
                     </div>
                 </div>

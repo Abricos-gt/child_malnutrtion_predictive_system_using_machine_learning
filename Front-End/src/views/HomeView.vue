@@ -1,4 +1,10 @@
 <script setup>
+import { computed } from "vue";
+import { authStore } from "../store";
+
+const dashboardRoute = computed(() =>
+    authStore.user?.role === "Admin" ? "/admin/dashboard" : "/dashboard",
+);
 </script>
 
 <template>
@@ -26,10 +32,10 @@
 
                     <div class="mt-10 flex flex-wrap justify-start gap-5">
                         <router-link
-                            to="/login"
+                            :to="authStore.user ? dashboardRoute : '/login'"
                             class="rounded-xl bg-emerald-600 px-10 py-4 text-lg font-bold text-white shadow-2xl transition-all hover:bg-emerald-500 active:scale-95"
                         >
-                            Start Screening
+                            {{ authStore.user ? "Return to Dashboard" : "Start Screening" }}
                         </router-link>
                         <a
                             href="#how-it-works"

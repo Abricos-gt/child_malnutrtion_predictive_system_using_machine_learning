@@ -9,14 +9,15 @@ import {
 
 const emit = defineEmits(["close", "submitted"]);
 
-const step = ref(1); // 1: Patient, 2: Screening
+const step = ref(1);
 const submitting = ref(false);
 const apiError = ref("");
 const fieldErrors = reactive({});
 
-const searchQuery = ref("");
+const patientSearchQuery = ref("");
 const searchResults = ref([]);
 const searching = ref(false);
+const lookingUpPatient = ref(false);
 const selectedPatient = ref(null);
 
 const registerMode = ref(false);
@@ -34,6 +35,7 @@ const patientForm = reactive({
 
 const screeningForm = reactive({
     patient_id: "",
+    age_months: "",
     weight_kg: "",
     height_cm: "",
     diarrhea: false,
@@ -42,11 +44,18 @@ const screeningForm = reactive({
 });
 
 const patientAgeMonths = computed(() => {
-    return selectedPatient.value?.identity?.current_age_months ?? "";
+    if (screeningForm.age_months !== "") {
+        return screeningForm.age_months;
+    }
+
+    const dob = selectedPatient.value?.dob;
+    if (!dob) return "";
+
+    return calculateAgeMonths(dob);
 });
 
 const patientDisplayName = computed(() => {
-    return selectedPatient.value?.identity?.name ?? "";
+    return selectedPatient.value?.name ?? "";
 });
 
 function clearFieldErrors() {
@@ -55,15 +64,33 @@ function clearFieldErrors() {
     });
 }
 
+function calculateAgeMonths(dateOfBirth) {
+    const dob = new Date(dateOfBirth);
+    if (Number.isNaN(dob.getTime())) return "";
+
+    const now = new Date();
+    let months =
+        (now.getFullYear() - dob.getFullYear()) * 12 +
+        (now.getMonth() - dob.getMonth());
+
+    if (now.getDate() < dob.getDate()) {
+        months -= 1;
+    }
+
+    return Math.max(months, 0);
+}
+
 async function runSearch() {
-    if (!searchQuery.value.trim()) {
+    const query = patientSearchQuery.value.trim();
+
+    if (!query) {
         searchResults.value = [];
         return;
     }
 
     searching.value = true;
     try {
-        const { data } = await searchPatients(searchQuery.value.trim());
+        const { data } = await searchPatients(query);
         searchResults.value = Array.isArray(data) ? data : [];
     } catch {
         searchResults.value = [];
@@ -72,17 +99,45 @@ async function runSearch() {
     }
 }
 
-async function selectPatient(patient) {
-    searchResults.value = [];
-    searchQuery.value = "";
+async function lookupPatient() {
+    const patientId = patientSearchQuery.value.trim();
+
+    if (!patientId) {
+        apiError.value = "Enter a patient ID to load the child record.";
+        return;
+    }
+
+    apiError.value = "";
+    lookingUpPatient.value = true;
+
     try {
-        const { data } = await getPatientDetails(patient.id);
+        const { data } = await getPatientDetails(patientId);
         selectedPatient.value = data;
-        screeningForm.patient_id = data.identity.id;
+        screeningForm.patient_id = patientId;
+        screeningForm.age_months = calculateAgeMonths(data.dob);
+        patientSearchQuery.value = data.name || patientId;
+        searchResults.value = [];
     } catch (error) {
         apiError.value =
-            error.response?.data?.message || "Unable to load patient details.";
+            error.response?.data?.message ||
+            error.response?.data?.error ||
+            "Unable to load patient details.";
+    } finally {
+        lookingUpPatient.value = false;
     }
+}
+
+async function selectPatient(patient) {
+    apiError.value = "";
+    patientSearchQuery.value = patient.full_name;
+    searchResults.value = [];
+    selectedPatient.value = {
+        name: patient.full_name,
+        dob: patient.dob,
+        gender: patient.gender,
+    };
+    screeningForm.patient_id = patient.id;
+    screeningForm.age_months = calculateAgeMonths(patient.dob);
 }
 
 async function registerNewPatient() {
@@ -91,8 +146,9 @@ async function registerNewPatient() {
     registerSuccess.value = "";
 
     if (!patientForm.name.trim()) fieldErrors.name = "Child name is required.";
-    if (!patientForm.parent_name.trim())
+    if (!patientForm.parent_name.trim()) {
         fieldErrors.parent_name = "Parent name is required.";
+    }
     if (!patientForm.dob) fieldErrors.dob = "Date of birth is required.";
     if (!patientForm.gender) fieldErrors.gender = "Gender is required.";
 
@@ -109,11 +165,14 @@ async function registerNewPatient() {
             phone: patientForm.phone.trim(),
         });
         registerSuccess.value = "Patient registered successfully.";
+
         const patientId = data.patient_id;
         if (patientId) {
             const detail = await getPatientDetails(patientId);
             selectedPatient.value = detail.data;
+            patientSearchQuery.value = detail.data.name || patientId;
             screeningForm.patient_id = patientId;
+            screeningForm.age_months = calculateAgeMonths(detail.data.dob);
             step.value = 2;
         }
     } catch (error) {
@@ -129,7 +188,7 @@ async function registerNewPatient() {
 function goToScreening() {
     apiError.value = "";
     if (!screeningForm.patient_id) {
-        apiError.value = "Select or register a patient first.";
+        apiError.value = "Load or register a patient first.";
         return;
     }
     step.value = 2;
@@ -149,8 +208,14 @@ async function submitScreening() {
         return;
     }
 
+    const ageMonths = Number(screeningForm.age_months);
     const weight = Number(screeningForm.weight_kg);
     const height = Number(screeningForm.height_cm);
+
+    if (!Number.isInteger(ageMonths) || ageMonths < 0 || ageMonths > 60) {
+        fieldErrors.age_months =
+            "Age must be a whole number between 0 and 60 months.";
+    }
 
     if (!Number.isFinite(weight) || weight < 2 || weight > 30) {
         fieldErrors.weight_kg = "Weight must be between 2 and 30 kg.";
@@ -166,6 +231,7 @@ async function submitScreening() {
     try {
         const { data } = await predict({
             patient_id: screeningForm.patient_id,
+            age_months: ageMonths,
             weight_kg: weight,
             height_cm: height,
             diarrhea: screeningForm.diarrhea ? 1 : 0,
@@ -177,8 +243,8 @@ async function submitScreening() {
             patient: {
                 patient_id: screeningForm.patient_id,
                 patient_name: patientDisplayName.value,
-                age_months: patientAgeMonths.value,
-                gender: selectedPatient.value?.identity?.gender,
+                age_months: ageMonths,
+                gender: selectedPatient.value?.gender,
                 weight_kg: weight,
                 height_cm: height,
             },
@@ -208,7 +274,7 @@ async function submitScreening() {
                         Child Screening
                     </h2>
                     <p class="mt-1 text-sm text-gray-600">
-                        Register or select a child, then record screening
+                        Register or load a child, then record screening
                         measurements.
                     </p>
                 </div>
@@ -253,12 +319,11 @@ async function submitScreening() {
                 </button>
             </div>
 
-            <!-- Step 1: Patient -->
             <div v-if="step === 1" class="mt-6 grid gap-6 lg:grid-cols-2">
                 <div class="rounded-xl border border-gray-200 bg-gray-50 p-4">
                     <div class="flex items-center justify-between">
                         <h3 class="text-sm font-semibold text-gray-900">
-                            Search Patient
+                            Load Existing Patient
                         </h3>
                         <button
                             type="button"
@@ -275,34 +340,59 @@ async function submitScreening() {
 
                     <div class="mt-3 grid gap-2">
                         <input
-                            v-model="searchQuery"
+                            v-model="patientSearchQuery"
                             type="text"
                             class="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-[#10B981] focus:outline-none focus:ring-2 focus:ring-[#10B981]/20"
-                            placeholder="Search by name or patient ID"
+                            placeholder="Search by child name, patient ID, or parent phone"
                             @input="runSearch"
                         />
                         <div v-if="searching" class="text-xs text-gray-500">
                             Searching...
                         </div>
                         <ul
-                            v-if="searchResults.length"
-                            class="max-h-40 overflow-auto rounded-lg border border-gray-200 bg-white text-sm"
+                            v-else-if="searchResults.length"
+                            class="max-h-56 overflow-auto rounded-lg border border-gray-200 bg-white text-sm"
                         >
                             <li
                                 v-for="patient in searchResults"
                                 :key="patient.id"
-                                class="cursor-pointer border-b border-gray-100 px-3 py-2 hover:bg-gray-50"
+                                class="cursor-pointer border-b border-gray-100 px-3 py-3 hover:bg-gray-50"
                                 @click="selectPatient(patient)"
                             >
                                 <div class="font-medium text-gray-900">
-                                    {{ patient.name }}
+                                    {{ patient.full_name }}
                                 </div>
-                                <div class="text-xs text-gray-500">
-                                    {{ patient.id }} • {{ patient.gender }} •
-                                    {{ patient.dob }}
+                                <div class="mt-1 text-xs text-gray-500">
+                                    ID: {{ patient.id }} • {{ patient.gender }} •
+                                    DOB: {{ patient.dob }}
+                                </div>
+                                <div class="mt-1 text-xs text-gray-500">
+                                    Parent: {{ patient.parent_name || "-" }} •
+                                    Phone: {{ patient.parent_phone || "-" }}
+                                </div>
+                                <div class="mt-1 text-xs text-gray-500">
+                                    Last status: {{ patient.last_status || "New Patient" }}
                                 </div>
                             </li>
                         </ul>
+                        <button
+                            v-if="!selectedPatient || patientSearchQuery === screeningForm.patient_id"
+                            type="button"
+                            class="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:text-gray-900 disabled:opacity-70"
+                            :disabled="lookingUpPatient"
+                            @click="lookupPatient"
+                        >
+                            {{
+                                lookingUpPatient
+                                    ? "Loading patient..."
+                                    : "Load By ID"
+                            }}
+                        </button>
+                        <p class="text-xs text-gray-500">
+                            Search by child name, patient ID, or parent phone.
+                            You can also paste an exact patient ID and load it
+                            directly.
+                        </p>
                     </div>
 
                     <div
@@ -313,15 +403,12 @@ async function submitScreening() {
                             Selected Patient
                         </p>
                         <p class="mt-1">
-                            {{ selectedPatient.identity.name }} •
-                            {{ selectedPatient.identity.gender }} •
-                            {{
-                                selectedPatient.identity.current_age_months
-                            }}
-                            months
+                            {{ selectedPatient.name }} •
+                            {{ selectedPatient.gender }} •
+                            {{ patientAgeMonths }} months
                         </p>
                         <p class="text-xs text-gray-500">
-                            ID: {{ selectedPatient.identity.id }}
+                            ID: {{ screeningForm.patient_id }}
                         </p>
                     </div>
                 </div>
@@ -345,8 +432,8 @@ async function submitScreening() {
                                 placeholder="Child full name"
                             />
                             <small
-                                class="text-xs text-red-600"
                                 v-if="fieldErrors.name"
+                                class="text-xs text-red-600"
                                 >{{ fieldErrors.name }}</small
                             >
                         </div>
@@ -361,8 +448,8 @@ async function submitScreening() {
                                 placeholder="Parent/guardian name"
                             />
                             <small
-                                class="text-xs text-red-600"
                                 v-if="fieldErrors.parent_name"
+                                class="text-xs text-red-600"
                                 >{{ fieldErrors.parent_name }}</small
                             >
                         </div>
@@ -377,8 +464,8 @@ async function submitScreening() {
                                     class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                                 />
                                 <small
-                                    class="text-xs text-red-600"
                                     v-if="fieldErrors.dob"
+                                    class="text-xs text-red-600"
                                     >{{ fieldErrors.dob }}</small
                                 >
                             </div>
@@ -395,8 +482,8 @@ async function submitScreening() {
                                     <option value="Female">Female</option>
                                 </select>
                                 <small
-                                    class="text-xs text-red-600"
                                     v-if="fieldErrors.gender"
+                                    class="text-xs text-red-600"
                                     >{{ fieldErrors.gender }}</small
                                 >
                             </div>
@@ -447,18 +534,17 @@ async function submitScreening() {
                 </div>
             </div>
 
-            <!-- Step 2: Screening -->
             <div v-if="step === 2" class="mt-6 grid gap-6 lg:grid-cols-2">
                 <div class="rounded-xl border border-gray-200 bg-gray-50 p-4">
                     <h3 class="text-sm font-semibold text-gray-900">
                         Selected Patient
                     </h3>
                     <p class="mt-2 text-sm text-gray-700">
-                        {{ patientDisplayName || "—" }}
+                        {{ patientDisplayName || "-" }}
                     </p>
                     <p class="text-xs text-gray-500">
-                        Age: {{ patientAgeMonths || "—" }} months • Gender:
-                        {{ selectedPatient?.identity?.gender || "—" }}
+                        Age: {{ patientAgeMonths || "-" }} months • Gender:
+                        {{ selectedPatient?.gender || "-" }}
                     </p>
                 </div>
 
@@ -467,6 +553,28 @@ async function submitScreening() {
                         Screening Measurements
                     </h3>
                     <div class="mt-3 grid gap-3">
+                        <div>
+                            <label class="text-xs font-medium text-gray-700"
+                                >Age at Screening (months)</label
+                            >
+                            <input
+                                v-model="screeningForm.age_months"
+                                type="number"
+                                min="0"
+                                max="60"
+                                class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                placeholder="e.g. 18"
+                            />
+                            <small
+                                v-if="fieldErrors.age_months"
+                                class="text-xs text-red-600"
+                                >{{ fieldErrors.age_months }}</small
+                            >
+                            <p class="mt-1 text-xs text-gray-500">
+                                Auto-filled from date of birth. Adjust if needed
+                                for the visit date.
+                            </p>
+                        </div>
                         <div>
                             <label class="text-xs font-medium text-gray-700"
                                 >Weight (kg)</label
@@ -478,8 +586,8 @@ async function submitScreening() {
                                 placeholder="e.g. 9.8"
                             />
                             <small
-                                class="text-xs text-red-600"
                                 v-if="fieldErrors.weight_kg"
+                                class="text-xs text-red-600"
                                 >{{ fieldErrors.weight_kg }}</small
                             >
                         </div>
@@ -494,8 +602,8 @@ async function submitScreening() {
                                 placeholder="e.g. 82"
                             />
                             <small
-                                class="text-xs text-red-600"
                                 v-if="fieldErrors.height_cm"
+                                class="text-xs text-red-600"
                                 >{{ fieldErrors.height_cm }}</small
                             >
                         </div>

@@ -1,11 +1,14 @@
 <script setup>
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import { authStore } from "../store";
 import { logout } from "../services/api";
 
 const isOpen = ref(false);
 const router = useRouter();
+const dashboardRoute = computed(() =>
+    authStore.user?.role === "Admin" ? "/admin/dashboard" : "/dashboard",
+);
 
 function toggleMenu() {
     isOpen.value = !isOpen.value;
@@ -48,13 +51,19 @@ async function handleLogout() {
                 <router-link class="transition hover:text-gray-900" to="/"
                     >Home</router-link
                 >
+                <router-link
+                    v-if="authStore.user"
+                    class="transition hover:text-gray-900"
+                    :to="dashboardRoute"
+                    >Dashboard</router-link
+                >
                 <a class="transition hover:text-gray-900" href="#user-ecosystem"
                     >Who's It For</a
                 >
             </nav>
 
             <!-- Right CTA -->
-            <div class="hidden md:flex">
+            <div class="hidden items-center gap-3 md:flex">
                 <router-link
                     v-if="!authStore.user"
                     to="/login"
@@ -62,14 +71,21 @@ async function handleLogout() {
                 >
                     Login
                 </router-link>
-                <button
-                    v-else
-                    type="button"
-                    class="rounded-lg border border-gray-200 px-6 py-2.5 text-lg font-semibold text-gray-700 transition hover:text-gray-900"
-                    @click="handleLogout"
-                >
-                    Logout
-                </button>
+                <template v-else>
+                    <router-link
+                        :to="dashboardRoute"
+                        class="rounded-lg bg-[#10B981] px-6 py-2.5 text-lg font-semibold text-white transition hover:bg-[#0EA371]"
+                    >
+                        Dashboard
+                    </router-link>
+                    <button
+                        type="button"
+                        class="rounded-lg border border-gray-200 px-6 py-2.5 text-lg font-semibold text-gray-700 transition hover:text-gray-900"
+                        @click="handleLogout"
+                    >
+                        Logout
+                    </button>
+                </template>
             </div>
 
             <!-- Mobile Menu Button -->
@@ -102,6 +118,13 @@ async function handleLogout() {
                 <router-link class="transition hover:text-gray-900" to="/"
                     >Home</router-link
                 >
+                <router-link
+                    v-if="authStore.user"
+                    class="transition hover:text-gray-900"
+                    :to="dashboardRoute"
+                    @click="isOpen = false"
+                    >Dashboard</router-link
+                >
                 <a class="transition hover:text-gray-900" href="#user-ecosystem"
                     >Who's It For</a
                 >
@@ -112,14 +135,22 @@ async function handleLogout() {
                 >
                     Login
                 </router-link>
-                <button
-                    v-else
-                    type="button"
-                    class="mt-2 inline-flex w-fit rounded-lg border border-gray-200 px-6 py-2.5 text-lg font-semibold text-gray-700 transition hover:text-gray-900"
-                    @click="handleLogout"
-                >
-                    Logout
-                </button>
+                <template v-else>
+                    <router-link
+                        :to="dashboardRoute"
+                        class="mt-2 inline-flex w-fit rounded-lg bg-[#10B981] px-6 py-2.5 text-lg font-semibold text-white transition hover:bg-[#0EA371]"
+                        @click="isOpen = false"
+                    >
+                        Dashboard
+                    </router-link>
+                    <button
+                        type="button"
+                        class="inline-flex w-fit rounded-lg border border-gray-200 px-6 py-2.5 text-lg font-semibold text-gray-700 transition hover:text-gray-900"
+                        @click="handleLogout"
+                    >
+                        Logout
+                    </button>
+                </template>
             </div>
         </div>
     </header>
