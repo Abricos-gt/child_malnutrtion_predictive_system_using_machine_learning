@@ -1,28 +1,34 @@
- 🚀 Proactive Child Malnutrition Prediction System
-AI-Driven Clinical Decision Support for Humanitarian Settings
-This system is a proactive clinical decision support tool designed to combat child malnutrition in internally displaced person (IDP) camps. By combining Random Forest Machine Learning with WHO Clinical Standards, it identifies high-risk children before severe wasting occurs, providing actionable treatment plans for Community Health Workers (CHWs).
+# 🚀 Proactive Child Malnutrition Prediction System
+### *AI-Driven Clinical Decision Support for Humanitarian Settings*
 
-📊 Project Impact & Motivation
-In humanitarian crises, identifying malnutrition is often reactive—caught only after physical deterioration. This project shifts the paradigm to proactive surveillance.
+[![Project Status: Awarded Best Project - Mekelle University](https://img.shields.io/badge/Award-Best%20Project%202026-gold)](https://mu.edu.et)
+[![Target Context: 70 Kare IDP Camp](https://img.shields.io/badge/Context-70%20Kare%20IDP%20Camp-red)](https://sdgs.un.org/goals/goal3)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
-Accuracy: 99.28% validation accuracy on clinical datasets.
+This system is a proactive clinical decision support tool designed to combat child malnutrition in internally displaced person (IDP) camps. By combining **Random Forest Machine Learning** with **WHO Clinical Standards**, it identifies high-risk children before severe wasting occurs, providing actionable treatment plans for Community Health Workers (CHWs).
 
-Explainability: Integrated SHAP values to provide clinicians with the "why" behind every risk score.
+---
 
-Localization: Built specifically for the nutritional landscape of the Tigray region, Ethiopia.
+## 📊 Project Impact & Motivation
+In humanitarian crises, identifying malnutrition is often reactive—caught only after physical deterioration. This project shifts the paradigm to **proactive surveillance**. 
 
-🏗 System Architecture
+* **Accuracy:** 99.28% validation accuracy on clinical datasets.
+* **Explainability:** Integrated **SHAP** values to provide clinicians with the "why" behind every risk score.
+* **Localization:** Built specifically for the nutritional landscape of the Tigray region, Ethiopia (70 Kare IDP Camp).
+
+---
+
+## 🏗 System Architecture
 The project is divided into a decoupled full-stack architecture designed for edge deployment in low-resource environments.
 
-Folder Structure
-
+### Project Structure
+```text
 ├── Backend/           # Flask API, AI Model (.pkl), WHO Tables, & SHAP logic
 ├── Front-End/         # Vue.js Dashboard & Data Visualizations (Chart.js)
 ├── .env               # Environment variables (DB Credentials)
 ├── .gitignore         # Version control exclusion
 ├── requirements.txt   # Python dependency manifest
 └── README.md          # Project Documentation
-
 🛠 Technical Stack
 Machine Learning: Random Forest Classifier (Benchmarked against XGBoost, SVM, and KNN).
 
