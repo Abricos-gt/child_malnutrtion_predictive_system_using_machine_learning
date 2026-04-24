@@ -29,6 +29,8 @@ The project is divided into a decoupled full-stack architecture designed for edg
 ├── .gitignore         # Version control exclusion
 ├── requirements.txt   # Python dependency manifest
 └── README.md          # Project Documentation
+
+
 🛠 Technical Stack
 Machine Learning: Random Forest Classifier (Benchmarked against XGBoost, SVM, and KNN).
 
