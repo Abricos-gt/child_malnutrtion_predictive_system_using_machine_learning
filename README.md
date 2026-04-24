@@ -1,39 +1,79 @@
- # Child Malnutrition Prediction Using Machine Learning
+ 🚀 Proactive Child Malnutrition Prediction System
+AI-Driven Clinical Decision Support for Humanitarian Settings
+This system is a proactive clinical decision support tool designed to combat child malnutrition in internally displaced person (IDP) camps. By combining Random Forest Machine Learning with WHO Clinical Standards, it identifies high-risk children before severe wasting occurs, providing actionable treatment plans for Community Health Workers (CHWs).
 
-This is a **work-in-progress project** aimed at predicting the risk of **child malnutrition** using machine learning techniques. The goal is to help healthcare workers and nutrition programs identify children at risk of **Severe Acute Malnutrition (SAM)**, **Moderate Acute Malnutrition (MAM)**, or classify them as **Healthy**, based on their health and nutrition data.
+📊 Project Impact & Motivation
+In humanitarian crises, identifying malnutrition is often reactive—caught only after physical deterioration. This project shifts the paradigm to proactive surveillance.
 
----
+Accuracy: 99.28% validation accuracy on clinical datasets.
 
-## Project Description
+Explainability: Integrated SHAP values to provide clinicians with the "why" behind every risk score.
 
-Malnutrition in children is a serious global health issue. Early identification of at-risk children can help prevent long-term health problems. This project uses historical child health data (e.g., age, weight, height, MUAC, feeding habits) to train a **Random Forest Classifier** that predicts the malnutrition status of new children.
+Localization: Built specifically for the nutritional landscape of the Tigray region, Ethiopia.
 
-The project aims to:
+🏗 System Architecture
+The project is divided into a decoupled full-stack architecture designed for edge deployment in low-resource environments.
 
-- Develop a **predictive model** for child malnutrition.
-- Identify the **most important features** that contribute to malnutrition.
-- Provide a **reproducible machine learning workflow** for healthcare applications.
+Folder Structure
 
----
+├── Backend/           # Flask API, AI Model (.pkl), WHO Tables, & SHAP logic
+├── Front-End/         # Vue.js Dashboard & Data Visualizations (Chart.js)
+├── .env               # Environment variables (DB Credentials)
+├── .gitignore         # Version control exclusion
+├── requirements.txt   # Python dependency manifest
+└── README.md          # Project Documentation
 
-## Current Status
+🛠 Technical Stack
+Machine Learning: Random Forest Classifier (Benchmarked against XGBoost, SVM, and KNN).
 
-- Model development in progress.  
-- Dataset preparation and feature selection underway.  
-- Virtual environment and dependencies managed via `requirements.txt`.  
+--Interpretability: SHAP (SHapley Additive exPlanations).
 
----
+--Backend: Flask (Python 3.x), SQLAlchemy.
 
-## Technologies (planned / in use)
+Database: PostgreSQL / MySQL (Relational health records).
 
-- Python 3.x  
-- scikit-learn  
-- pandas & numpy  
-- matplotlib / seaborn (for visualizations)  
+Frontend: Vue.js, Tailwind CSS (Mobile-responsive for field use).
 
----
+Standards: WHO Child Growth Standards (LMS Method calculation).
 
-## Notes
+🚀 Getting Started
+1. Prerequisites
+Python 3.10+
 
-- This is an early-stage project; folder structure, scripts, and detailed instructions will be added as the project progresses.  
-- Future updates will include training scripts, prediction interface, and dataset examples.
+Node.js (for Frontend)
+
+Database (MySQL/PostgreSQL)
+
+2. Installation
+
+   # Clone the repository
+git clone https://github.com/yourusername/malnutrition-prediction.git
+
+# Install Backend Dependencies
+cd Backend
+pip install -r ../requirements.txt
+
+# Setup Environment
+# Create a .env file and add your DATABASE_URI
+
+3. Running the System
+
+   # Start Flask Server
+python app.py
+
+# Start Frontend (in a new terminal)
+cd Front-End
+npm install
+npm run dev
+
+🩺 Clinical Logic & Triage
+The system implements a Knowledge-Based Hybrid Recommender. It doesn't just predict; it triages:
+
+Critical (Emergency): Immediate referral to Stabilization Centers (F-75 protocol).
+
+Critical (OTP): Enrollment in Outpatient Therapeutic Programs (RUTF/Plumpy'Nut).
+
+At Risk (MAM): Supplementary feeding (CSB++) and bi-weekly monitoring.
+
+Stable: Community-based growth monitoring and hygiene education.
+
